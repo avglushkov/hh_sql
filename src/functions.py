@@ -1,4 +1,4 @@
-from classes import From_hh_api_employers, From_hh_api_vacancies, Vacancies_File
+from classes import From_hh_api_employers, From_hh_api_vacancies, Vacancies_File, DBManager
 import psycopg2
 import json
 import csv
@@ -30,13 +30,13 @@ def main_menu() -> None:
         case 2:
             sub_menu_get_vacancies()
         case 3:
-            menu_db_tables_create(host_name, port_num, database_name, user_name, pwd)
+            menu_db_tables_create()
         case 7:
             print('МЫ ЗАКОНЧИЛИ. ПОКА!')
         case _:
             print('В МЕНЮ НЕТ ТАКОГО ПУНКТА')
 
-def menu_db_tables_create(host_name, port_num, database_name, user_name, pwd) -> None:
+def menu_db_tables_create() -> None:
     """ функция создания таблиц с в Базе данных"""
 
     conn = psycopg2.connect(
@@ -92,8 +92,8 @@ def sub_menu_get_vacancies() -> None:
 
     print('\nДЕЙСТВИЯ СО СПИСКОМ ВАКАНСИЙ:\n'
           '    1. Загрузка вакансии по выбранным работодателям\n'
-          '    2. -\n'
-          '    3. -\n'
+          '    2. Вывод количества вакансий, загруженных по работодателям\n'
+          '    3. Вывод списка вакансий\n'
           '    4. Возврат в основное меню')
 
     selected_point = int(input('ВВЕДИТЕ НОМЕР ПУНКТА МЕНЮ: '))
@@ -102,9 +102,9 @@ def sub_menu_get_vacancies() -> None:
         case 1:
             menu_get_vacancies()
         case 2:
-            main_menu()
+            menu_get_companies_vacancies_count()
         case 3:
-            main_menu()
+            menu_get_all_vacancies()
         case 4:
             main_menu()
         case _:
@@ -130,8 +130,6 @@ def get_employers_list() -> None:
     else:
         print("Компании работодатели пока не были добавлены")
         sub_menu_get_employers()
-
-
 
 def get_employers() -> None:
     """ функция загрузки работадателей по указанию их наименований"""
@@ -196,39 +194,19 @@ def get_employers() -> None:
                                 writer = csv.writer(f)
                                 writer.writerow(add_employer)
                             print('Работодатель добавлен в список')
-
                 break
-
-        conn = psycopg2.connect(
-            host=host_name,
-            port=port_num,
-            database=database_name,
-            user=user_name,
-            password=pwd)
-        # Открытие курсора
-        cur = conn.cursor()
-
-        cur.execute("TRUNCATE TABLE employers RESTART IDENTITY CASCADE")
-
-        with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
-            reader = csv.reader(f)
-
-            for row in reader:
-                cur.execute(
-                    "INSERT INTO employers (employer_id, employer_name, employer_url) VALUES (%s, %s, %s) returning *",
-                    row)
-
-        conn.commit()
-        cur.close
-
+        # Записываем данные о работодателях в БД
+        hh_api = From_hh_api_employers()
+        employers_list = hh_api.write_employers_into_db()
         sub_menu_get_employers()
     else:
         print('Выполните новый поиск')
         sub_menu_get_employers()
 
-
 def menu_get_vacancies() -> None:
     """ функция загрузки вакансий по работодателям, выбранным пользователем"""
+
+    search_text = input('Введите ключевое слово для поиска вакансий: ')
 
     conn = psycopg2.connect(
         host=host_name,
@@ -247,79 +225,45 @@ def menu_get_vacancies() -> None:
             reader = csv.reader(f)
             for row in reader:
                 hh_api = From_hh_api_vacancies()
-                hh_api.get_vacancies(row[0], row[1])
+                hh_api.get_vacancies(row[0], row[1], search_text)
         sub_menu_get_vacancies()
-               #  # file = Vacancies_File('../data/raw_vacancies.json', '../data/vacancies.json', '../data/employers.json')
-               #  # file.from_raw_file()
-               #
-               #  conn = psycopg2.connect(
-               #      host=host_name,
-               #      port=port_num,
-               #      database=database_name,
-               #      user=user_name,
-               #      password=pwd)
-               #
-               #  cur = conn.cursor()
-               #
-               # # os.chmod('/home/avgl/Projects/hh_sql/data/raw_vacancies.json', 0o444)
-               #
-               #  cur.execute("DROP TABLE IF EXISTS json_data_table CASCADE;")
-               #  cur.execute("CREATE TABLE json_data_table(data jsonb);")
-               #  cur.execute("COPY json_data_table(data) FROM '/tmp/raw_vacancies.json';")
-               #
-               #  cur.execute("CREATE TABLE json_records AS SELECT * FROM json_populate_recordset(null::JSONB, (SELECT raw_data FROM json_data_table));")
-               #
-               #  # INSERT INTO vacancies (vacancy_id,
-               #  #                        vacancy_name,
-               #  #                        vacancy_url,
-               #  #                        salary_from,
-               #  #                        salary_to,
-               #  #                        currancy,
-               #  #                        gross,
-               #  #                        address,
-               #  #                        employer_id,
-               #  #                        snippet_requirement,
-               #  #                        snippet_responsibility)
-               #  #
-               #  #
-               #  #
-               #  # SELECT raw_data-> > 'key1', raw_data->'nested'-> > 'key2'
-               #  # FROM
-               #  # staging_table;
-               #
-               #  conn.commit()
-               #  cur.close
-
     else:
         print('\nСначала нужно выбрать работодателей. Сейчас их список пуст')
         main_menu()
 
-# def add_employers_into_table() -> None:
-#     """ функция записи данных в таблицы"""
-#
-#     conn = psycopg2.connect(
-#     host = host_name,
-#     port = port_num,
-#     database = database_name,
-#     user = user_name,
-#     password= pwd)
-#     #Открытие курсора
-#     cur = conn.cursor()
-#
-#     cur.execute("TRUNCATE TABLE employers RESTART IDENTITY CASCADE")
-#
-#     with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
-#         reader = csv.reader(f)
-#
-#         for row in reader:
-#             cur.execute(
-#                 "INSERT INTO employers (employer_id, employer_name, employer_url) VALUES (%s, %s, %s) returning *", row)
-#
-#     conn.commit()
-#     cur.close
-#     print('Данные по работодателям добавлены в БД')
-#
-#     sub_menu_get_employers()
+def menu_get_companies_vacancies_count():
+    """ Функция вывода количества вакансий, загруженных по работодателям"""
+
+
+    employer = DBManager()
+    employer.get_companies_and_vacancies_count()
+
+    print(f'\nВ базу всего загружено {employer.get_companies_and_vacancies_count()[1][0][0]} вакансий: ')
+
+    for emp in employer.get_companies_and_vacancies_count()[0]:
+        print(f'{emp[0]} - {emp[1]} шт.')
+
+def menu_get_all_vacancies() -> None:
+    """ Функция вывода всех загруженных вакансий"""
+
+    vacancies_list = []
+
+    vacancies = DBManager()
+    vacancies_list = vacancies.get_all_vacancies()
+
+    print(f'\nВакансии, загруженные в базу: ')
+
+    for vacancy in vacancies_list:
+        if vacancy[2] == 0:
+            if vacancy[3] == 0:
+                print(f'{vacancy[0]} - {vacancy[1]} ЗП не указана {vacancy[6]}')
+            else:
+                print(f'{vacancy[0]} - {vacancy[1]} ЗП до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
+        else:
+            if vacancy[3] == 0:
+                print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} {vacancy[4]} {vacancy[6]}')
+            else:
+                print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
 
 
 main_menu()

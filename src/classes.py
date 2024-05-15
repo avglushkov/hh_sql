@@ -9,6 +9,12 @@ from abc import ABC, abstractmethod
 from typing import Any
 from operator import itemgetter
 
+# Параметры подключения к БД работодателей и вакансий
+host_name = 'localhost'
+port_num = '5432'
+database_name = 'hh_db'
+user_name = 'hh_bd_user'
+pwd = '654321'
 
 class Abs_APIVacancy(ABC):
     """ Абстрактный класс для одъектов класса вакансия и его наследников """
@@ -22,14 +28,8 @@ class From_hh_api_vacancies(Abs_APIVacancy):
     def __init__(self) -> None:
         self.api_url = 'https://api.hh.ru/vacancies'
 
-    def get_vacancies(self, employer_id, employer_name) -> None:
-        """ метод позволяющий запрашивать записи с сайта hh, содержащие текст search_text и записывать его в файл в формате json """
-
-        host_name = 'localhost'
-        port_num = '5432'
-        database_name = 'hh_db'
-        user_name = 'hh_bd_user'
-        pwd = '654321'
+    def get_vacancies(self, employer_id, employer_name, search_text) -> None:
+        """ метод позволяющий запрашивать записи с сайта hh по ID работодателя и записываем их в БД """
 
         conn = psycopg2.connect(
             host=host_name,
@@ -39,15 +39,14 @@ class From_hh_api_vacancies(Abs_APIVacancy):
             password=pwd)
 
         cur = conn.cursor()
-
-
-
-
-        response = requests.get(self.api_url, params={'employer_id': employer_id, 'per_page': 100})
+        # Забираем данные с сайта hh.ru для работодателя по его ID
+        response = requests.get(self.api_url, params={'text': search_text,'employer_id': employer_id, 'per_page': 100})
         print(response)
         print(f'Загружены данные по {employer_name}')
 
         vacancies = response.json()
+
+        # вакансии построчно считываем, переводим в нужный формат и грузим в таблицу БД vacancies
 
         for vacancy in vacancies['items']:
             added_position = {}
@@ -94,27 +93,8 @@ class From_hh_api_vacancies(Abs_APIVacancy):
             cur.execute("""INSERT INTO vacancies (vacancy_id, vacancy_name, vacancy_url, salary_from, salary_to, currency, gross, address, employer_id, snippet_requirement, snippet_responsibility) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""", position)
             conn.commit()
 
-
         cur.close
 
-
-
-        # with open("../data/vacancies.csv", 'a', encoding='utf-8') as f:
-        #     writer = csv.writer(f)
-        #     writer.writerow(vacancies['items'])
-
-        # with open("../data/vacancies.csv", 'w') as csv_file:
-        #     writer = csv.writer(csv_file)
-        #     for k, v in vacancies.items():
-        #         writer.writerow([k, v])
-
-# Откройте файл JSON и загрузите его содержимое в переменную с помощью open('test.json', 'r')
-# в качестве json_file: json_data = json.load(json_file)
-# Создайте новый CSV-файл и запишите заголовки используя
-# open('test.csv', 'w', newline=") как csv_file:
-# writer = csv.writer(csv_file)
-# writer.C(json_data[0].keys())
-# Записать каждую строку данных из файла JSON в файл CSV для строки в json_data: writer.writerow(row.values())
 
 
 
@@ -124,14 +104,14 @@ class Abs_APIEmployer(ABC):
     def __init__(self) -> None:
         pass
 class From_hh_api_employers(Abs_APIEmployer):
-    """ Класс для запроса данных по работодателям с сайта hh.ru """
+    """ Класс для запроса списка работодателей с сайта hh.ru и загрузки в БД  """
 
     def __init__(self) -> None:
         self.api_url = 'https://api.hh.ru/employers'
 
     def get_employers(self, search_text) -> list:
-        """ метод позволяющий запрашивать записи с сайта hh, содержащие
-        текст search_text и записывать его в файл в формате json """
+        """ метод запрашивающий список работодателей, содержащих в наименовании
+        текст search_text """
 
         response = requests.get(self.api_url, params={'text': search_text, 'per_page': 100})
         print(response)
@@ -141,9 +121,30 @@ class From_hh_api_employers(Abs_APIEmployer):
 
         return employers
 
-        # with open(raw_employers_file_path, 'wt', encoding='utf-8') as data_file:
-        #     json.dump(employers['items'], data_file, ensure_ascii=False)
-        #
+    def write_employers_into_db(self) -> None:
+        """ Метод записи данных о работодателей в БД из списка, сформированного пользователем"""
+
+        conn = psycopg2.connect(
+            host=host_name,
+            port=port_num,
+            database=database_name,
+            user=user_name,
+            password=pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("TRUNCATE TABLE employers RESTART IDENTITY CASCADE")
+
+        with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                cur.execute(
+                    "INSERT INTO employers (employer_id, employer_name, employer_url) VALUES (%s, %s, %s) returning *",
+                    row)
+
+        conn.commit()
+        cur.close
+
 
 class Vacancies_File():
 
@@ -153,69 +154,6 @@ class Vacancies_File():
         self.vacancy_file = vacancy_file
         self.employer_file = employer_file
 
-    def from_raw_file(self) -> None:
-        """  метод, который позволяет из исходного файла c вакансиями,
-            полученного импортом с сайта hh.ru, сделать файл с нужными данными
-        """
-
-        vacancies_to_source = []
-        employers_to_sourse = []
-
-
-        with open(self.raw_file, 'rt', encoding='utf-8') as rf:
-            vacancies = json.load(rf)
-
-
-
-
-            for vacancy in vacancies:
-                added_position = {}
-                added_employer = {}
-                added_address = {}
-
-                added_position['vacancy_id'] = vacancy['id']
-                added_position['vacancy_name'] = vacancy['name']
-                added_position['vacancy_url'] = vacancy['url']
-                if vacancy['address'] == None:
-                    added_position['address'] = '-nd-'
-                elif vacancy['address']['city'] == None:
-                    added_position['address'] = '-nd-'
-                else:
-                    added_position['address'] = (vacancy['address']['city'])
-                if vacancy['salary'] == None:
-                    added_position['salary_from'] = 0
-                    added_position['salary_to'] = 0
-                    added_position['currency'] = "RUR"
-                    added_position['gross'] = True
-
-                elif vacancy['salary']['from'] == None:
-                    added_position['salary_from'] = 0
-                elif vacancy['salary']['to'] == None:
-                    added_position['salary_to'] = 0
-                else:
-                    added_position['salary_from'] = vacancy['salary']['from']
-                    added_position['salary_to'] = vacancy['salary']['to']
-                    added_position['currency'] = "RUR"
-                    added_position['gross'] = True
-
-                added_position['employer_id'] = vacancy['employer']['id']
-                added_position['snippet_requirement'] = vacancy['snippet']['requirement']
-                added_position['snippet_responsibility'] = vacancy['snippet']['responsibility']
-
-                vacancies_to_source.append(added_position) #собираем данные по вакансиям
-
-                # added_employer['employer_id'] = vacancy['employer']['id']
-                # added_employer['employer_name'] = vacancy['employer']['name']
-                # added_employer['employer_url'] = vacancy['employer']['url']
-                #
-                # employers_to_sourse.append(added_employer) #собираем данные по работодателям
-
-
-        with open(self.vacancy_file, 'wt', encoding='utf-8') as vf:
-            json.dump(vacancies_to_source, vf, ensure_ascii=False)
-
-        # with open(self.employer_file, 'wt', encoding='utf-8') as ef:
-        #     json.dump(employers_to_sourse, ef, ensure_ascii=False)
 
 class Vacancy():
     """класс объекта Вакансия"""
@@ -255,18 +193,69 @@ class Vacancy():
 class DBManager():
     """ Класс для работы с данными в БД """
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def get_companies_and_vacancies_count():
+    def get_companies_and_vacancies_count(self) -> list:
         """получает список всех компаний и количество вакансий у каждой компании"""
 
-        pass
+        emp_count = []
 
-    def get_all_vacancies():
+        conn = psycopg2.connect(
+            host=host_name,
+            port=port_num,
+            database=database_name,
+            user=user_name,
+            password=pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("""select employers.employer_name, COUNT(*) from vacancies
+                    join employers on vacancies.employer_id = employers.employer_id
+                    group by employer_name;""")
+
+        emp_count = cur.fetchall()
+
+        cur.execute("""select count(*) from vacancies;""")
+        vacancies_count = cur.fetchall()
+
+        conn.commit()
+        cur.close
+
+        return emp_count , vacancies_count
+
+    def get_all_vacancies(self) -> list:
         """получает список всех вакансий с указанием названия компании,
             названия вакансии и зарплаты и ссылки на вакансию."""
-        pass
+
+        vacancies_list = []
+
+        conn = psycopg2.connect(
+            host=host_name,
+            port=port_num,
+            database=database_name,
+            user=user_name,
+            password=pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("""SELECT 
+                            employers.employer_name, 
+                            vacancy_name,
+                            salary_from, 
+                            salary_to,
+                            currency,
+                            gross,
+                            vacancy_url
+                        FROM vacancies
+                        JOIN employers ON vacancies.employer_id = employers.employer_id;""")
+
+        vacancies_list = cur.fetchall()
+
+        conn.commit()
+        cur.close
+
+        return vacancies_list
 
     def get_avg_salary():
         """получает среднюю зарплату по вакансиям."""
@@ -282,3 +271,7 @@ class DBManager():
         """получает список всех вакансий, в названии которых содержатся
             переданные в метод слова, например python."""
         pass
+
+
+employer = DBManager()
+print(employer.get_all_vacancies())
