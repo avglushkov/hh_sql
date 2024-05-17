@@ -1,4 +1,4 @@
-from classes import From_hh_api_employers, From_hh_api_vacancies, Vacancies_File, DBManager
+from classes import From_hh_api_employers, From_hh_api_vacancies, DBManager
 import psycopg2
 import json
 import csv

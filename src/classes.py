@@ -158,49 +158,41 @@ class From_hh_api_employers(Abs_APIEmployer):
         cur.close
 
 
-class Vacancies_File():
 
-    def __init__(self, raw_file, vacancy_file, employer_file) -> None:
-
-        self.raw_file = raw_file
-        self.vacancy_file = vacancy_file
-        self.employer_file = employer_file
-
-
-class Vacancy():
-    """класс объекта Вакансия"""
-
-    id: int
-    name: str
-    url: str
-    salary: dict
-    address: dict
-    employer: dict
-    snippet: dict
-
-    def __init__(self, id, name, url, salary, address, employer_id, snippet) -> None:
-
-        self.id = id
-        self.name = name
-        self.url = url
-        if address == None:
-            self.address = {'city': '-'}
-        else:
-            self.address = address
-
-        self.employer = employer
-        self.snippet = snippet
-        if salary == None:
-            self.salary = {'from': 0, 'to': 0, "currency": "RUR", "gross": True}
-        else:
-            self.salary = salary
-
-    def __repr__(self) -> str:
-        return f'{self.id}, {self.name}, {self.url}, {self.salary}, {self.address},{self.employer},{self.snippet}'
-
-    def __str__(self) -> str:
-
-        return f'{self.id}, {self.name} в "{self.employer['name']}" с доходом от {self.salary['from']} до {self.salary['to']} в городе {self.address['city']}. Ссылка: {self.url}. Требования: {self.snippet['requirement']}'
+# class Vacancy():
+#     """класс объекта Вакансия"""
+#
+#     id: int
+#     name: str
+#     url: str
+#     salary: dict
+#     address: dict
+#     employer: dict
+#     snippet: dict
+#
+#     def __init__(self, id, name, url, salary, address, employer_id, snippet) -> None:
+#
+#         self.id = id
+#         self.name = name
+#         self.url = url
+#         if address == None:
+#             self.address = {'city': '-'}
+#         else:
+#             self.address = address
+#
+#         self.employer = employer
+#         self.snippet = snippet
+#         if salary == None:
+#             self.salary = {'from': 0, 'to': 0, "currency": "RUR", "gross": True}
+#         else:
+#             self.salary = salary
+#
+#     def __repr__(self) -> str:
+#         return f'{self.id}, {self.name}, {self.url}, {self.salary}, {self.address},{self.employer},{self.snippet}'
+#
+#     def __str__(self) -> str:
+#
+#         return f'{self.id}, {self.name} в "{self.employer['name']}" с доходом от {self.salary['from']} до {self.salary['to']} в городе {self.address['city']}. Ссылка: {self.url}. Требования: {self.snippet['requirement']}'
 
 class DBManager():
     """ Класс для работы с данными в БД """
@@ -368,9 +360,9 @@ class DBManager():
         cur.close
 
         for vacancy in vacancies:
-            if vacancy[2] > average_salary_from:
+            if vacancy[2] >= average_salary_from:
                 vacancies_from.append(vacancy)
-            if vacancy[3] > average_salary_to:
+            if vacancy[3] >= average_salary_to:
                 vacancies_to.append(vacancy)
 
         return vacancies_from, vacancies_to
