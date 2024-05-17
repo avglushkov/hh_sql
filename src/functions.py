@@ -18,9 +18,8 @@ def main_menu() -> None:
     print('\nОСНОВНОЕ МЕНЮ:\n'
           '    1. Действия со списком компаний-работодателей\n'
           '    2. Действия со списком вакансий\n'          
-          '    3. Создание / очистка структуры базы данных вакансий и работодателей\n'
-          
-          '    7. Завершение работы')
+          '    3. Создание / очистка структуры базы данных вакансий и работодателей\n'          
+          '    4. Завершение работы')
 
     selected_point = int(input('ВВЕДИТЕ НОМЕР ПУНКТА МЕНЮ: '))
 
@@ -31,7 +30,7 @@ def main_menu() -> None:
             sub_menu_get_vacancies()
         case 3:
             menu_db_tables_create()
-        case 7:
+        case 4:
             print('МЫ ЗАКОНЧИЛИ. ПОКА!')
         case _:
             print('В МЕНЮ НЕТ ТАКОГО ПУНКТА')
@@ -94,7 +93,10 @@ def sub_menu_get_vacancies() -> None:
           '    1. Загрузка вакансии по выбранным работодателям\n'
           '    2. Вывод количества вакансий, загруженных по работодателям\n'
           '    3. Вывод списка вакансий\n'
-          '    4. Возврат в основное меню')
+          '    4. Вывод среднего уровня ЗП по загруженным вакансиям\n'
+          '    5. Вывод списка вакансий с ЗП выше среднего\n'
+          '    6. Вывод списка вакансий по ключевому слову\n'
+          '    7. Возврат в основное меню')
 
     selected_point = int(input('ВВЕДИТЕ НОМЕР ПУНКТА МЕНЮ: '))
 
@@ -106,6 +108,12 @@ def sub_menu_get_vacancies() -> None:
         case 3:
             menu_get_all_vacancies()
         case 4:
+            menu_get_average_salary()
+        case 5:
+            menu_get_vacancies_with_higher_salary()
+        case 6:
+            menu_get_vacancies_with_keyword()
+        case 7:
             main_menu()
         case _:
             print('В МЕНЮ НЕТ ТАКОГО ПУНКТА')
@@ -138,7 +146,7 @@ def get_employers() -> None:
 
     search_word = input('Введите наименование работодателя : ')
 
-    hh_api = From_hh_api_employers()
+    hh_api = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
     employers_list = hh_api.get_employers(search_word)
     employers_id_list = []
 
@@ -196,7 +204,7 @@ def get_employers() -> None:
                             print('Работодатель добавлен в список')
                 break
         # Записываем данные о работодателях в БД
-        hh_api = From_hh_api_employers()
+        hh_api = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
         employers_list = hh_api.write_employers_into_db()
         sub_menu_get_employers()
     else:
@@ -208,23 +216,14 @@ def menu_get_vacancies() -> None:
 
     search_text = input('Введите ключевое слово для поиска вакансий: ')
 
-    conn = psycopg2.connect(
-        host=host_name,
-        port=port_num,
-        database=database_name,
-        user=user_name,
-        password=pwd)
-
-    cur = conn.cursor()
-    cur.execute("TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE")
-    conn.commit()
-    cur.close
+    truncate_table = DBManager(host_name, port_num, database_name, user_name, pwd)
+    truncate_table.truncate_vacancies_table()
 
     if os.path.isfile('../data/employers_list.csv'):
         with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
             reader = csv.reader(f)
             for row in reader:
-                hh_api = From_hh_api_vacancies()
+                hh_api = From_hh_api_vacancies(host_name, port_num, database_name, user_name, pwd)
                 hh_api.get_vacancies(row[0], row[1], search_text)
         sub_menu_get_vacancies()
     else:
@@ -235,7 +234,7 @@ def menu_get_companies_vacancies_count():
     """ Функция вывода количества вакансий, загруженных по работодателям"""
 
 
-    employer = DBManager()
+    employer = DBManager(host_name, port_num, database_name, user_name, pwd)
     employer.get_companies_and_vacancies_count()
 
     print(f'\nВ базу всего загружено {employer.get_companies_and_vacancies_count()[1][0][0]} вакансий: ')
@@ -243,15 +242,15 @@ def menu_get_companies_vacancies_count():
     for emp in employer.get_companies_and_vacancies_count()[0]:
         print(f'{emp[0]} - {emp[1]} шт.')
 
+    sub_menu_get_vacancies()
+
 def menu_get_all_vacancies() -> None:
     """ Функция вывода всех загруженных вакансий"""
 
     vacancies_list = []
 
-    vacancies = DBManager()
+    vacancies = DBManager(host_name, port_num, database_name, user_name, pwd)
     vacancies_list = vacancies.get_all_vacancies()
-
-    print(f'\nВакансии, загруженные в базу: ')
 
     for vacancy in vacancies_list:
         if vacancy[2] == 0:
@@ -264,9 +263,52 @@ def menu_get_all_vacancies() -> None:
                 print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} {vacancy[4]} {vacancy[6]}')
             else:
                 print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
+    sub_menu_get_vacancies()
+
+def menu_get_average_salary() -> None:
+    """ Функция вывода всех загруженных вакансий"""
+
+    average_salary = []
+
+    vacancies = DBManager(host_name, port_num, database_name, user_name, pwd)
+    average_salary = vacancies.get_avg_salary()
+
+    print(f'\nСредний уровень ЗП "ОТ", указанный для загруженных вакансий: {int(average_salary[0])} RUR')
+    print(f'\nСредний уровень ЗП "ДО", указанный для загруженных вакансий: {int(average_salary[1])} RUR')
+
+    sub_menu_get_vacancies()
+
+def menu_get_vacancies_with_higher_salary():
+    """ Функция вывода списка вакансий с ЗП выше среднего """
 
 
-main_menu()
+    vacancies = DBManager(host_name, port_num, database_name, user_name, pwd)
+    average_salary = vacancies.get_avg_salary()
+    vacancies_with_higher_salary_from = vacancies.get_vacancies_with_higher_salary(average_salary[0], average_salary[1])[0]
+    vacancies_with_higher_salary_to = vacancies.get_vacancies_with_higher_salary(average_salary[0], average_salary[1])[1]
+
+    print(f'\nВакансии с уровнем ЗП "ОТ" выше среднего {average_salary[0]} RUR')
+    for vacancy in vacancies_with_higher_salary_from:
+        print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
+
+    print(f'\nВакансии с уровнем ЗП "ДО" выше среднего {average_salary[0]} RUR')
+    for vacancy in vacancies_with_higher_salary_to:
+        print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
+
+    sub_menu_get_vacancies()
+def menu_get_vacancies_with_keyword() -> None:
+    """ Функция вывода вакансий по ключевому слову """
+
+    key_word = input('Введите слово для поиска вакансий из загруженного списка: ')
+
+    vacancies = DBManager(host_name, port_num, database_name, user_name, pwd)
+    vacancies_with_keyword = vacancies.get_vacancies_with_keyword(key_word)
+
+    for vacancy in vacancies_with_keyword:
+        print(f'{vacancy[0]} - {vacancy[1]} ЗП от {vacancy[2]} до {vacancy[3]} {vacancy[4]} {vacancy[6]}')
+
+    sub_menu_get_vacancies()
+
 
 
 

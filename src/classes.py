@@ -9,12 +9,12 @@ from abc import ABC, abstractmethod
 from typing import Any
 from operator import itemgetter
 
-# Параметры подключения к БД работодателей и вакансий
-host_name = 'localhost'
-port_num = '5432'
-database_name = 'hh_db'
-user_name = 'hh_bd_user'
-pwd = '654321'
+# # Параметры подключения к БД работодателей и вакансий
+# host_name = 'localhost'
+# port_num = '5432'
+# database_name = 'hh_db'
+# user_name = 'hh_bd_user'
+# pwd = '654321'
 
 class Abs_APIVacancy(ABC):
     """ Абстрактный класс для одъектов класса вакансия и его наследников """
@@ -25,18 +25,24 @@ class Abs_APIVacancy(ABC):
 class From_hh_api_vacancies(Abs_APIVacancy):
     """ Класс для запроса данных по вакансиям с сайта hh.ru """
 
-    def __init__(self) -> None:
+
+    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
         self.api_url = 'https://api.hh.ru/vacancies'
+        self.host_name = host_name
+        self.port_num = port_num
+        self.database_name = database_name
+        self.user_name = user_name
+        self.pwd = pwd
 
     def get_vacancies(self, employer_id, employer_name, search_text) -> None:
         """ метод позволяющий запрашивать записи с сайта hh по ID работодателя и записываем их в БД """
 
         conn = psycopg2.connect(
-            host=host_name,
-            port=port_num,
-            database=database_name,
-            user=user_name,
-            password=pwd)
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
 
         cur = conn.cursor()
         # Забираем данные с сайта hh.ru для работодателя по его ID
@@ -106,8 +112,14 @@ class Abs_APIEmployer(ABC):
 class From_hh_api_employers(Abs_APIEmployer):
     """ Класс для запроса списка работодателей с сайта hh.ru и загрузки в БД  """
 
-    def __init__(self) -> None:
+    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
         self.api_url = 'https://api.hh.ru/employers'
+        self.host_name = host_name
+        self.port_num = port_num
+        self.database_name = database_name
+        self.user_name = user_name
+        self.pwd = pwd
+
 
     def get_employers(self, search_text) -> list:
         """ метод запрашивающий список работодателей, содержащих в наименовании
@@ -125,11 +137,11 @@ class From_hh_api_employers(Abs_APIEmployer):
         """ Метод записи данных о работодателей в БД из списка, сформированного пользователем"""
 
         conn = psycopg2.connect(
-            host=host_name,
-            port=port_num,
-            database=database_name,
-            user=user_name,
-            password=pwd)
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
 
         cur = conn.cursor()
 
@@ -193,20 +205,40 @@ class Vacancy():
 class DBManager():
     """ Класс для работы с данными в БД """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
 
+        self.host_name = host_name
+        self.port_num = port_num
+        self.database_name = database_name
+        self.user_name = user_name
+        self.pwd = pwd
+
+    def truncate_vacancies_table(self) -> None:
+        """ очищает таблицу вакансий"""
+
+        conn = psycopg2.connect(
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE")
+        conn.commit()
+        cur.close
     def get_companies_and_vacancies_count(self) -> list:
         """получает список всех компаний и количество вакансий у каждой компании"""
 
         emp_count = []
 
         conn = psycopg2.connect(
-            host=host_name,
-            port=port_num,
-            database=database_name,
-            user=user_name,
-            password=pwd)
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
 
         cur = conn.cursor()
 
@@ -231,11 +263,11 @@ class DBManager():
         vacancies_list = []
 
         conn = psycopg2.connect(
-            host=host_name,
-            port=port_num,
-            database=database_name,
-            user=user_name,
-            password=pwd)
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
 
         cur = conn.cursor()
 
@@ -257,21 +289,130 @@ class DBManager():
 
         return vacancies_list
 
-    def get_avg_salary():
+    def get_avg_salary(self):
         """получает среднюю зарплату по вакансиям."""
 
-        pass
+        salary_list = []
 
-    def get_vacancies_with_higher_salary():
+        conn = psycopg2.connect(
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("""SELECT salary_from, salary_to FROM vacancies;""")
+
+        salary_list = cur.fetchall()
+
+        conn.commit()
+        cur.close
+
+        salary_from_sum = 0
+        salary_to_sum = 0
+        salary_from_count = 0
+        salary_to_count = 0
+
+        for salary in salary_list:
+            if salary[0] != 0:
+                salary_from_sum += salary[0]
+                salary_from_count += 1
+            if salary[1] != 0:
+                salary_to_sum += salary[1]
+                salary_to_count += 1
+
+        if salary_from_count == 0:
+            average_salary_from = 0
+        else:
+            average_salary_from = salary_from_sum / salary_from_count
+
+        if salary_to_count == 0:
+            average_salary_to = 0
+        else:
+            average_salary_to = salary_to_sum / salary_to_count
+
+        return average_salary_from, average_salary_to
+
+
+    def get_vacancies_with_higher_salary(self, average_salary_from, average_salary_to) -> list:
         """получает список всех вакансий, у которых зарплата выше средней по всем вакансиям."""
 
-        pass
+        vacancies = []
+        vacancies_from = []
+        vacancies_to = []
 
-    def get_vacancies_with_keyword():
+        conn = psycopg2.connect(
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("""SELECT       employers.employer_name, 
+                                    vacancy_name,
+                                    salary_from, 
+                                    salary_to,
+                                    currency,
+                                    gross,
+                                    vacancy_url
+                                FROM vacancies
+                                JOIN employers ON vacancies.employer_id = employers.employer_id
+                                ;""")
+
+        vacancies = cur.fetchall()
+        conn.commit()
+        cur.close
+
+        for vacancy in vacancies:
+            if vacancy[2] > average_salary_from:
+                vacancies_from.append(vacancy)
+            if vacancy[3] > average_salary_to:
+                vacancies_to.append(vacancy)
+
+        return vacancies_from, vacancies_to
+
+    def get_vacancies_with_keyword(self, key_word):
         """получает список всех вакансий, в названии которых содержатся
             переданные в метод слова, например python."""
-        pass
 
 
-employer = DBManager()
-print(employer.get_all_vacancies())
+        vacancies_with_word = []
+
+        conn = psycopg2.connect(
+            host=self.host_name,
+            port=self.port_num,
+            database=self.database_name,
+            user=self.user_name,
+            password=self.pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("""SELECT       employers.employer_name, 
+                                            vacancy_name,
+                                            salary_from, 
+                                            salary_to,
+                                            currency,
+                                            gross,
+                                            vacancy_url,
+                                            snippet_requirement,
+                                            snippet_responsibility
+                                        FROM vacancies
+                                        JOIN employers ON vacancies.employer_id = employers.employer_id
+                                        ;""")
+
+        vacancies = cur.fetchall()
+        conn.commit()
+        cur.close
+
+        for vacancy in vacancies:
+            if key_word.lower() in vacancy[1].lower():
+                vacancies_with_word.append(vacancy)
+
+        return vacancies_with_word
+
+# employer = DBManager()
+# print(employer.get_avg_salary())
