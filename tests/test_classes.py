@@ -1,3 +1,5 @@
+""" Модуль тестирования классов """
+
 from src.classes import From_hh_api_employers, From_hh_api_vacancies, DBManager
 
 import pytest
@@ -15,6 +17,7 @@ def test_get_vacancies():
 
     truncate_table = DBManager(host_name, port_num, database_name, user_name, pwd)
     truncate_table.truncate_vacancies_table()
+
     get_api = From_hh_api_vacancies(host_name, port_num, database_name, user_name, pwd)
     get_api.get_vacancies('3776', 'МТС', 'SRE')
 

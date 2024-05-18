@@ -1,3 +1,5 @@
+""" Модуль работы с пользовательским меню """
+
 from classes import From_hh_api_employers, From_hh_api_vacancies, DBManager
 import psycopg2
 import json
@@ -167,8 +169,8 @@ def get_employers() -> None:
                 employer_id in employers_id_list
 
             except ValueError:
-                #print('Введенный идентификатор отсутствует в списке')
                 continue
+
             if employer_id in employers_id_list:
                 add_employer = []
 
@@ -233,7 +235,6 @@ def menu_get_vacancies() -> None:
 def menu_get_companies_vacancies_count():
     """ Функция вывода количества вакансий, загруженных по работодателям"""
 
-
     employer = DBManager(host_name, port_num, database_name, user_name, pwd)
     employer.get_companies_and_vacancies_count()
 
@@ -280,7 +281,6 @@ def menu_get_average_salary() -> None:
 
 def menu_get_vacancies_with_higher_salary():
     """ Функция вывода списка вакансий с ЗП выше среднего """
-
 
     vacancies = DBManager(host_name, port_num, database_name, user_name, pwd)
     average_salary = vacancies.get_avg_salary()

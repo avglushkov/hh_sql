@@ -1,3 +1,4 @@
+""" Модуль содержащий классы работы с данными по вакансиям и работодателям"""
 import json
 import csv
 import requests
@@ -9,12 +10,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 from operator import itemgetter
 
-# # Параметры подключения к БД работодателей и вакансий
-# host_name = 'localhost'
-# port_num = '5432'
-# database_name = 'hh_db'
-# user_name = 'hh_bd_user'
-# pwd = '654321'
 
 class Abs_APIVacancy(ABC):
     """ Абстрактный класс для одъектов класса вакансия и его наследников """
@@ -55,7 +50,7 @@ class From_hh_api_vacancies(Abs_APIVacancy):
         # вакансии построчно считываем, переводим в нужный формат и грузим в таблицу БД vacancies
 
         for vacancy in vacancies['items']:
-            added_position = {}
+
             position = []
 
             position.append(int(vacancy['id']))
@@ -157,42 +152,6 @@ class From_hh_api_employers(Abs_APIEmployer):
         conn.commit()
         cur.close
 
-
-
-# class Vacancy():
-#     """класс объекта Вакансия"""
-#
-#     id: int
-#     name: str
-#     url: str
-#     salary: dict
-#     address: dict
-#     employer: dict
-#     snippet: dict
-#
-#     def __init__(self, id, name, url, salary, address, employer_id, snippet) -> None:
-#
-#         self.id = id
-#         self.name = name
-#         self.url = url
-#         if address == None:
-#             self.address = {'city': '-'}
-#         else:
-#             self.address = address
-#
-#         self.employer = employer
-#         self.snippet = snippet
-#         if salary == None:
-#             self.salary = {'from': 0, 'to': 0, "currency": "RUR", "gross": True}
-#         else:
-#             self.salary = salary
-#
-#     def __repr__(self) -> str:
-#         return f'{self.id}, {self.name}, {self.url}, {self.salary}, {self.address},{self.employer},{self.snippet}'
-#
-#     def __str__(self) -> str:
-#
-#         return f'{self.id}, {self.name} в "{self.employer['name']}" с доходом от {self.salary['from']} до {self.salary['to']} в городе {self.address['city']}. Ссылка: {self.url}. Требования: {self.snippet['requirement']}'
 
 class DBManager():
     """ Класс для работы с данными в БД """
@@ -406,5 +365,3 @@ class DBManager():
 
         return vacancies_with_word
 
-# employer = DBManager()
-# print(employer.get_avg_salary())
