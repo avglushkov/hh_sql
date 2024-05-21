@@ -1,4 +1,5 @@
 """ Модуль содержащий классы работы с данными по вакансиям и работодателям"""
+
 import json
 import csv
 import requests
@@ -11,13 +12,14 @@ from typing import Any
 from operator import itemgetter
 
 
-class Abs_APIVacancy(ABC):
+
+class AbsAPIVacancy(ABC):
     """ Абстрактный класс для одъектов класса вакансия и его наследников """
     @abstractmethod
     def __init__(self) -> None:
         pass
 
-class From_hh_api_vacancies(Abs_APIVacancy):
+class FromHHAPIVacancies(AbsAPIVacancy):
     """ Класс для запроса данных по вакансиям с сайта hh.ru """
 
 
@@ -29,8 +31,62 @@ class From_hh_api_vacancies(Abs_APIVacancy):
         self.user_name = user_name
         self.pwd = pwd
 
-    def get_vacancies(self, employer_id, employer_name, search_text) -> None:
-        """ метод позволяющий запрашивать записи с сайта hh по ID работодателя и записываем их в БД """
+    def get_vacancies(self, employer_id, employer_name, search_text) -> list:
+        """ метод позволяющий запрашивать записи с сайта hh по ID работодателя """
+
+        # Забираем данные с сайта hh.ru для работодателя по его ID
+        response = requests.get(self.api_url, params={'text': search_text,'employer_id': employer_id, 'per_page': 100})
+        print(response)
+        print(f'Загружены данные по {employer_name}')
+
+        vacancies = response.json()
+
+        return vacancies
+
+class AbsAPIEmployer(ABC):
+    """ Абстрактный класс для одъектов класса работадатель и его наследников """
+    @abstractmethod
+    def __init__(self) -> None:
+        pass
+class FromHHAPIEmployers(AbsAPIEmployer):
+    """ Класс для запроса списка работодателей с сайта hh.ru и загрузки в БД  """
+
+    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
+        self.api_url = 'https://api.hh.ru/employers'
+        self.host_name = host_name
+        self.port_num = port_num
+        self.database_name = database_name
+        self.user_name = user_name
+        self.pwd = pwd
+
+
+    def get_employers(self, search_text) -> list:
+        """ метод запрашивающий список работодателей, содержащих в наименовании
+        текст search_text """
+
+        response = requests.get(self.api_url, params={'text': search_text, 'per_page': 100})
+        print(response)
+        print(response.status_code)
+
+        employers = response.json()
+
+        return employers
+
+
+
+class DBManager():
+    """ Класс для работы с данными в БД """
+
+    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
+
+        self.host_name = host_name
+        self.port_num = port_num
+        self.database_name = database_name
+        self.user_name = user_name
+        self.pwd = pwd
+
+    def truncate_vacancies_table(self) -> None:
+        """ очищает таблицу вакансий"""
 
         conn = psycopg2.connect(
             host = self.host_name,
@@ -40,14 +96,45 @@ class From_hh_api_vacancies(Abs_APIVacancy):
             password = self.pwd)
 
         cur = conn.cursor()
-        # Забираем данные с сайта hh.ru для работодателя по его ID
-        response = requests.get(self.api_url, params={'text': search_text,'employer_id': employer_id, 'per_page': 100})
-        print(response)
-        print(f'Загружены данные по {employer_name}')
 
-        vacancies = response.json()
+        cur.execute("TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE")
+        conn.commit()
+        cur.close
+    def write_employers_into_db(self) -> None:
+        """ Метод записи данных о работодателей в БД из списка, сформированного пользователем"""
 
-        # вакансии построчно считываем, переводим в нужный формат и грузим в таблицу БД vacancies
+        conn = psycopg2.connect(
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
+
+        cur = conn.cursor()
+
+        cur.execute("TRUNCATE TABLE employers RESTART IDENTITY CASCADE")
+
+        with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                cur.execute(
+                    "INSERT INTO employers (employer_id, employer_name, employer_url) VALUES (%s, %s, %s) returning *",
+                    row)
+
+        conn.commit()
+        cur.close
+
+    def write_vacancies_into_db(self, vacancies):
+        """ метод записи вакансий, загруженных с сайта в БД"""
+
+        conn = psycopg2.connect(
+            host = self.host_name,
+            port = self.port_num,
+            database = self.database_name,
+            user = self.user_name,
+            password = self.pwd)
+
+        cur = conn.cursor()
 
         for vacancy in vacancies['items']:
 
@@ -96,89 +183,6 @@ class From_hh_api_vacancies(Abs_APIVacancy):
 
         cur.close
 
-
-
-
-class Abs_APIEmployer(ABC):
-    """ Абстрактный класс для одъектов класса работадатель и его наследников """
-    @abstractmethod
-    def __init__(self) -> None:
-        pass
-class From_hh_api_employers(Abs_APIEmployer):
-    """ Класс для запроса списка работодателей с сайта hh.ru и загрузки в БД  """
-
-    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
-        self.api_url = 'https://api.hh.ru/employers'
-        self.host_name = host_name
-        self.port_num = port_num
-        self.database_name = database_name
-        self.user_name = user_name
-        self.pwd = pwd
-
-
-    def get_employers(self, search_text) -> list:
-        """ метод запрашивающий список работодателей, содержащих в наименовании
-        текст search_text """
-
-        response = requests.get(self.api_url, params={'text': search_text, 'per_page': 100})
-        print(response)
-        print(response.status_code)
-
-        employers = response.json()
-
-        return employers
-
-    def write_employers_into_db(self) -> None:
-        """ Метод записи данных о работодателей в БД из списка, сформированного пользователем"""
-
-        conn = psycopg2.connect(
-            host = self.host_name,
-            port = self.port_num,
-            database = self.database_name,
-            user = self.user_name,
-            password = self.pwd)
-
-        cur = conn.cursor()
-
-        cur.execute("TRUNCATE TABLE employers RESTART IDENTITY CASCADE")
-
-        with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                cur.execute(
-                    "INSERT INTO employers (employer_id, employer_name, employer_url) VALUES (%s, %s, %s) returning *",
-                    row)
-
-        conn.commit()
-        cur.close
-
-
-class DBManager():
-    """ Класс для работы с данными в БД """
-
-    def __init__(self, host_name, port_num, database_name, user_name, pwd) -> None:
-
-        self.host_name = host_name
-        self.port_num = port_num
-        self.database_name = database_name
-        self.user_name = user_name
-        self.pwd = pwd
-
-    def truncate_vacancies_table(self) -> None:
-        """ очищает таблицу вакансий"""
-
-        conn = psycopg2.connect(
-            host = self.host_name,
-            port = self.port_num,
-            database = self.database_name,
-            user = self.user_name,
-            password = self.pwd)
-
-        cur = conn.cursor()
-
-        cur.execute("TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE")
-        conn.commit()
-        cur.close
     def get_companies_and_vacancies_count(self) -> list:
         """получает список всех компаний и количество вакансий у каждой компании"""
 
