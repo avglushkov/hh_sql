@@ -1,47 +1,51 @@
 """ Модуль тестирования классов """
 
-from src.classes import From_hh_api_employers, From_hh_api_vacancies, DBManager
+from src.classes import FromHHAPIEmployers, FromHHAPIVacancies, DBManager
+from configparser import ConfigParser
 
 import pytest
 import json
 import psycopg2
+import psycopg2.extras
+import csv
+import os
 
-host_name='localhost'
-port_num='5432'
-database_name='hh_db'
-user_name='hh_bd_user'
-pwd='654321'
+filename='../src/database.ini'
+section='postgresql'
+def load_test_config(filename, section):
+    """ Функция загрузки параметров подключения к БД """
+
+    parser = ConfigParser()
+    parser.read(filename)
+    config = []
+    params = parser.items(section)
+    for param in params:
+        config.append(param[1])
+
+    return config
+
+host_name = load_test_config(filename,section)[0]
+port_num = load_test_config(filename,section)[1]
+database_name = load_test_config(filename,section)[2]
+user_name = load_test_config(filename,section)[3]
+pwd = load_test_config(filename,section)[4]
+
 
 def test_get_vacancies():
-    """проверяем работоспособность загрузки данных по вакансиям в таблицу"""
+    """проверяем работоспособность загрузки данных """
 
     truncate_table = DBManager(host_name, port_num, database_name, user_name, pwd)
     truncate_table.truncate_vacancies_table()
 
-    get_api = From_hh_api_vacancies(host_name, port_num, database_name, user_name, pwd)
-    get_api.get_vacancies('3776', 'МТС', 'SRE')
+    get_api = FromHHAPIVacancies(host_name, port_num, database_name, user_name, pwd)
+    vacancies = get_api.get_vacancies('3776', 'МТС', 'SRE')
 
-    conn = psycopg2.connect(
-        host = host_name,
-        port = port_num,
-        database = database_name,
-        user = user_name,
-        password = pwd)
-
-    cur = conn.cursor()
-    cur.execute(
-        """SELECT COUNT(*) FROM vacancies""")
-    result = cur.fetchall()
-    conn.commit()
-    cur.close
-
-    assert result[0][0] > 0
-
+    assert len(vacancies) > 0
 
 def test_get_employers():
     """ Проверка запроса списка работодателей"""
 
-    emp = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
+    emp = FromHHAPIEmployers(host_name, port_num, database_name, user_name, pwd)
     employers = emp.get_employers('SRE')
 
     assert len(employers) > 0
@@ -50,7 +54,7 @@ def test_write_employers_into_db():
     """ Проверяем загрузку данных по работодателям в таблицу БД.
         !!!Обратите внимание, что в файле employers_list.csv должна быть хотя бы одна строка """
 
-    emp = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
+    emp = DBManager(host_name, port_num, database_name, user_name, pwd)
     employers = emp.write_employers_into_db()
 
     conn = psycopg2.connect(
@@ -77,7 +81,6 @@ def data_vacancies():
                 (3,'Вакансия3 Agile', 'http://3.hh.ru', 200, 0, 'RUR', True, 'Москва', 3776, 'Требования', 'Ответственность')]
 
     return vacancies
-
 
 def test_get_companies_and_vacancies_count(data_vacancies):
     """ Проверка метода вывода количества загруженных вакансий по работодателям"""

@@ -1,18 +1,35 @@
 """ Модуль работы с пользовательским меню """
 
-from classes import From_hh_api_employers, From_hh_api_vacancies, DBManager
+from src.classes import FromHHAPIVacancies, FromHHAPIEmployers, DBManager
+
 import psycopg2
+import psycopg2.extras
 import json
 import csv
 import os
-import psycopg2.extras
 
-host_name='localhost'
-port_num='5432'
-database_name='hh_db'
-user_name='hh_bd_user'
-pwd='654321'
+from configparser import ConfigParser
 
+def load_config(filename, section):
+    """ Функция загрузки параметров подключения к БД """
+
+    parser = ConfigParser()
+    parser.read(filename)
+    config = []
+    params = parser.items(section)
+    for param in params:
+        config.append(param[1])
+
+    return config
+
+filename='database.ini'
+section='postgresql'
+
+host_name = load_config(filename,section)[0]
+port_num = load_config(filename,section)[1]
+database_name = load_config(filename,section)[2]
+user_name = load_config(filename,section)[3]
+pwd = load_config(filename,section)[4]
 
 def main_menu() -> None:
     """ функция выбора пункта основного меню """
@@ -148,7 +165,7 @@ def get_employers() -> None:
 
     search_word = input('Введите наименование работодателя : ')
 
-    hh_api = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
+    hh_api = FromHHAPIEmployers(host_name, port_num, database_name, user_name, pwd)
     employers_list = hh_api.get_employers(search_word)
     employers_id_list = []
 
@@ -206,7 +223,7 @@ def get_employers() -> None:
                             print('Работодатель добавлен в список')
                 break
         # Записываем данные о работодателях в БД
-        hh_api = From_hh_api_employers(host_name, port_num, database_name, user_name, pwd)
+        hh_api = DBManager(host_name, port_num, database_name, user_name, pwd)
         employers_list = hh_api.write_employers_into_db()
         sub_menu_get_employers()
     else:
@@ -218,15 +235,25 @@ def menu_get_vacancies() -> None:
 
     search_text = input('Введите ключевое слово для поиска вакансий: ')
 
-    truncate_table = DBManager(host_name, port_num, database_name, user_name, pwd)
-    truncate_table.truncate_vacancies_table()
+    truncate_vac_table = DBManager(host_name, port_num, database_name, user_name, pwd)
+    truncate_vac_table.truncate_vacancies_table()
+
+    write_emp = DBManager(host_name, port_num, database_name, user_name, pwd)
+    write_emp.write_employers_into_db()
+
 
     if os.path.isfile('../data/employers_list.csv'):
         with open('../data/employers_list.csv', 'rt', encoding='utf-8') as f:
             reader = csv.reader(f)
             for row in reader:
-                hh_api = From_hh_api_vacancies(host_name, port_num, database_name, user_name, pwd)
-                hh_api.get_vacancies(row[0], row[1], search_text)
+
+
+                hh_api = FromHHAPIVacancies(host_name, port_num, database_name, user_name, pwd)
+                vacancies = hh_api.get_vacancies(row[0], row[1], search_text)
+
+                vac_into_bd = DBManager(host_name, port_num, database_name, user_name, pwd)
+                vac_into_bd.write_vacancies_into_db(vacancies)
+
         sub_menu_get_vacancies()
     else:
         print('\nСначала нужно выбрать работодателей. Сейчас их список пуст')
